@@ -1,20 +1,20 @@
 
 # Packages
-library(tidyverse)
-library(janitor)
-library(lubridate)
+library(plyr) # mapvalues, to use the cluster number
+library(tidyverse) # duh
+library(janitor) # clean variable names to snakecase
+library(lubridate) # date time formatting
+library(zoo) # Mainly for na.locf and creating rolling functions
+library(factoextra) # kmeans
 
-# Configs
-WOMENS_DATA_STRING = 'data/hackathon_womens.csv'
-NWHL_DATA_STRING = 'data/hackathon_nwhl.csv'
-X_MAX = 200
-Y_MAX = 85
+# Load scripts
+source('configs.R')
+source('utils.R')
+source('custom_rink_function.R')
 
-GOAL_LINE_1_X = 11
-BLUE_LINE_1_X = 11 + 64
-CENTRE_X = 100
-BLUE_LINE_2_X = 11 + 64 + 50
-GOAL_LINE_2_X = 11 + 64 + 50 + 64
+# Define the events which signal the end of a possession
+POSSESSION_ENDING_EVENTS = c('Shot', 'Goal', 'Incomplete Play', 'Penalty Taken', 'Dump In/Out')
+POSSESSION_STARTING_EVENTS = c('Takeaway', 'Faceoff Win') # also dump outs that are lost
 
 # Import data
 data_womens = read_csv(WOMENS_DATA_STRING) 
@@ -26,13 +26,11 @@ team_names = sort(unique(data_raw$`Home Team`))
 team_codes = 1:length(team_names)
 names(team_codes) = team_names
 
-# TODO determine shot assists and goal assists
-# Determine which plays occurred on the same 'possessions'
-
-# Feature engineering
+# Engineer features that may be useful
 data = data_raw %>%
   clean_names() %>%
-  mutate(home_team_code = team_codes[home_team],
+  mutate(event_number = row_number(),
+         home_team_code = team_codes[home_team],
          away_team_code = team_codes[away_team],
          game_id = paste(home_team_code, away_team_code, game_date, sep = '/'),
          y_coordinate = Y_MAX - y_coordinate,
@@ -65,6 +63,7 @@ data = data_raw %>%
          previous_seconds_remaining = lag(seconds_remaining),
          time_difference = previous_seconds_remaining - seconds_remaining,
          following_event_type = lead(event),
+         following_event_type = ifelse(is.na(following_event_type), "end_of_period", following_event_type),
          following_event_team = lead(team),
          following_event_player = lead(player),
          following_event_x = lead(x_coordinate),
@@ -75,16 +74,23 @@ data = data_raw %>%
          following_detail_4 = lead(detail_4),
          following_seconds_remaining = lead(seconds_remaining),
          time_to_next_event = seconds_remaining - following_seconds_remaining,
-         shot_assist = ifelse(following_event_type == 'Shot', 1, 0),
-         goal_assist = ifelse(following_event_type == 'Goal', 1, 0))
-
-
-# Building possession features
-#' assume that a possession ends with a shot or takeaway
-#' create new feature 'giveaway
-
-# Match results
-womens_results = data %>% 
+         shot_assist = ifelse(following_event_type %in% c('Shot', 'Goal'), 1, 0),
+         goal_assist = ifelse(following_event_type == 'Goal', 1, 0)) %>%
+  # Add features indicating which events occurred on the same possession
+  group_by(game_id, period) %>%
+  mutate(is_last_event_of_possession = case_when(event %in% POSSESSION_ENDING_EVENTS ~ 1,
+                                                 following_event_type %in% POSSESSION_STARTING_EVENTS ~ 1,
+                                                 following_event_type == 'Dump In/Out' & detail_1 == 'Lost' ~ 1,
+                                                 row_number() == n() ~ 1,
+                                                 TRUE ~ 0)) %>%
+  ungroup(game_id, period) %>% 
+  mutate(event_possession_number = cumsum(coalesce(is_last_event_of_possession, 0)) + is_last_event_of_possession*0,
+         possession_number = na.locf(event_possession_number, na.rm = FALSE, fromLast = TRUE),
+         is_last_event_of_possession = ifelse(is.na(is_last_event_of_possession), 0, is_last_event_of_possession))
+         
+# Create data frame that contains the match listing and final scores for ease of lookup if needed
+# Also include how many goals were scored by each team on powerplay/shorthand
+womens_match_results = data %>% 
   group_by(game_id, game_date, home_team, away_team) %>%
   summarize(home_score = max(home_team_goals),
             away_score = max(away_team_goals),
@@ -98,3 +104,4 @@ womens_results = data %>%
             away_goals_0 = sum(event == 'Goal' & home_event == 0 & skater_advantage == 0),
             away_goals_plus1 = sum(event == 'Goal' & home_event == 0 & skater_advantage == 1),
             away_goals_plus2 = sum(event == 'Goal' & home_event == 0 & skater_advantage == 2))
+
