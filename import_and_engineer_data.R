@@ -35,6 +35,12 @@ data = data_raw %>%
          game_id = paste(home_team_code, away_team_code, game_date, sep = '/'),
          y_coordinate = Y_MAX - y_coordinate,
          y_coordinate_2 = Y_MAX - y_coordinate_2,
+         x_diff_to_goal = GOAL_LOCATION_X - x_coordinate,
+         y_diff_to_goal = GOAL_LOCATION_Y - y_coordinate,
+         distance_to_goal = sqrt(x_diff_to_goal^2 + y_diff_to_goal^2),
+         gradient_to_goal = abs(y_diff_to_goal)/x_diff_to_goal,
+         angle_rad_to_goal = atan(gradient_to_goal),
+         angle_deg_to_goal = (angle_rad_to_goal * 180/pi),
          clock_minutes = hour(clock),
          clock_seconds = minute(clock),
          custom_time = ms(paste(clock_minutes, clock_seconds, sep = ':')),
@@ -42,7 +48,14 @@ data = data_raw %>%
          home_event = ifelse(team == home_team, 1, 0),
          opponent = ifelse(home_event == 1, away_team, home_team),
          score_difference = ifelse(home_event == 1, home_team_goals - away_team_goals, away_team_goals - home_team_goals),
+         score_situation = case_when(score_difference > 0 ~ 'winning',
+                                     score_difference == 0 ~ 'tie',
+                                     score_difference < 0 ~ 'losing'),
          situation_skaters = paste(home_team_skaters, away_team_skaters, sep = '-'),
+         woman_advantage = ifelse(home_event == 1, home_team_skaters - away_team_skaters, away_team_skaters - home_team_skaters),
+         skater_situation = case_when(woman_advantage > 0 ~ 'powerplay',
+                                      woman_advantage == 0 ~ 'even_strength',
+                                      woman_advantage < 0 ~ 'shorthanded'),
          home_pulled_goalie = ifelse(home_team_skaters == 6, 1, 0),
          away_pulled_goalie = ifelse(away_team_skaters == 6, 1, 0),
          team_pulled_goalie = case_when(home_pulled_goalie == 0 ~ 0,
@@ -57,6 +70,7 @@ data = data_raw %>%
   group_by(game_id, period) %>%
   mutate(previous_event_type = lag(event),
          previous_event_team = lag(team),
+         possession_changed = ifelse(previous_event_team != team, 1, 0),
          previous_event_player = lag(player),
          previous_event_x = lag(x_coordinate),
          previous_event_y = lag(y_coordinate),
@@ -65,6 +79,7 @@ data = data_raw %>%
          following_event_type = lead(event),
          following_event_type = ifelse(is.na(following_event_type), "end_of_period", following_event_type),
          following_event_team = lead(team),
+         possession_changes_after = ifelse(team != following_event_team, 1, 0),
          following_event_player = lead(player),
          following_event_x = lead(x_coordinate),
          following_event_y = lead(y_coordinate),
@@ -78,15 +93,17 @@ data = data_raw %>%
          goal_assist = ifelse(following_event_type == 'Goal', 1, 0)) %>%
   # Add features indicating which events occurred on the same possession
   group_by(game_id, period) %>%
-  mutate(is_last_event_of_possession = case_when(event %in% POSSESSION_ENDING_EVENTS ~ 1,
-                                                 following_event_type %in% POSSESSION_STARTING_EVENTS ~ 1,
-                                                 following_event_type == 'Dump In/Out' & detail_1 == 'Lost' ~ 1,
-                                                 row_number() == n() ~ 1,
-                                                 TRUE ~ 0)) %>%
+  mutate(is_first_event_of_possession = case_when(possession_changed == 1 ~ 1,
+                                                  event %in% POSSESSION_STARTING_EVENTS ~ 1,
+                                                  previous_event_type %in% c('Shot', 'Goal') ~ 1,
+                                                  row_number() == 1 ~ 1,
+                                                  TRUE ~ 0)) %>%
   ungroup(game_id, period) %>% 
-  mutate(event_possession_number = cumsum(coalesce(is_last_event_of_possession, 0)) + is_last_event_of_possession*0,
+  mutate(event_possession_number = cumsum(coalesce(is_first_event_of_possession, 0)) + is_first_event_of_possession*0,
          possession_number = na.locf(event_possession_number, na.rm = FALSE, fromLast = TRUE),
-         is_last_event_of_possession = ifelse(is.na(is_last_event_of_possession), 0, is_last_event_of_possession))
+         is_first_event_of_possession = ifelse(is.na(is_first_event_of_possession), 0, is_first_event_of_possession)) %>%
+  group_by(game_id, period, possession_number) %>% 
+  mutate(is_last_event_of_possession = ifelse(row_number() == n(), 1, 0))
          
 # Create data frame that contains the match listing and final scores for ease of lookup if needed
 # Also include how many goals were scored by each team on powerplay/shorthand
