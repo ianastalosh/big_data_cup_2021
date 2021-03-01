@@ -27,24 +27,7 @@ create_pairs_vectors = function(vector) {
 
 # Get stats describing what happened on each possession
 
-# Add XG model to data
-source('xg_model.R')
-
-data_shots = data_cluster_added %>% 
-  ungroup() %>%
-  filter(event %in% c('Shot', 'Goal'))
-
-shot_xg = predict(xg_glm, data_shots, 'response')
-data_shots_xg = cbind(data_shots, shot_xg)
-
-data_no_shots = data_cluster_added %>%
-  ungroup() %>%
-  filter(event %!in% c('Shot', 'Goal'))
-
-data_cluster_xg_added = bind_rows(data_no_shots, data_shots_xg) %>% 
-  arrange(event_number)
-
-match_possessions = data_cluster_xg_added %>%
+match_possessions = data_clusters_xg_added %>%
   group_by(game_date, game_id, period, skater_situation, score_situation, possession_number) %>% 
   summarize(starting_time = max(seconds_remaining),
             ending_time = min(seconds_remaining),
