@@ -1,24 +1,11 @@
 
-# Packages
-library(plyr) # mapvalues, to use the cluster number
-library(tidyverse) # duh
-library(janitor) # clean variable names to snakecase
-library(lubridate) # date time formatting
-library(zoo) # Mainly for na.locf and creating rolling functions
-library(factoextra) # kmeans
-
-# Load scripts
-source('configs.R')
-source('utils.R')
-source('custom_rink_function.R')
-
 # Define the events which signal the end of a possession
 POSSESSION_ENDING_EVENTS = c('Shot', 'Goal', 'Incomplete Play', 'Penalty Taken', 'Dump In/Out')
 POSSESSION_STARTING_EVENTS = c('Takeaway', 'Faceoff Win') # also dump outs that are lost
 
 # Import data
-data_womens = read_csv(WOMENS_DATA_STRING) 
-data_nwhl = read_csv(NWHL_DATA_STRING)
+data_womens = read_csv(WOMENS_DATA_STRING) %>% mutate(competition = 'womens')
+data_nwhl = read_csv(NWHL_DATA_STRING) %>% mutate(competition = 'nwhl')
 data_raw = bind_rows(data_womens, data_nwhl)
 
 # Extract team names to make codes
@@ -88,9 +75,22 @@ data = data_raw %>%
          following_detail_3 = lead(detail_3),
          following_detail_4 = lead(detail_4),
          following_seconds_remaining = lead(seconds_remaining),
+         following_two_events = lead(event, n = 2),
+         following_two_detail_2= lead(detail_2, n = 2),
+         following_three_events = lead(event, n = 3),
+         following_three_detail_2 = lead(detail_2, n = 3),
          time_to_next_event = seconds_remaining - following_seconds_remaining,
+         shot_attempt = ifelse(event %in% c('Shot', 'Goal'), 1, 0),
+         shot_blocked = ifelse(detail_2 == 'Blocked', 1, 0),
          shot_assist = ifelse(following_event_type %in% c('Shot', 'Goal'), 1, 0),
-         goal_assist = ifelse(following_event_type == 'Goal', 1, 0)) %>%
+         shot_assist_blocked = ifelse(following_detail_2 == 'Blocked', 1, 0),
+         shot_assist_secondary = ifelse(following_two_events %in% c('Shot', 'Goal'), 1, 0),
+         shot_assist_secondary_blocked = ifelse(following_two_detail_2 == 'Blocked', 1, 0),
+         shot_assist_third = ifelse(following_three_events %in% c('Shot', 'Goal'), 1, 0),
+         shot_assist_third_blocked = ifelse(following_three_detail_2 == 'Blocked', 1, 0),
+         goal_assist = ifelse(following_event_type == 'Goal', 1, 0),
+         goal_assist_secondary = ifelse(following_two_events == 'Goal', 1, 0),
+         goal_assist_third = ifelse(following_three_events == 'Goal', 1, 0)) %>%
   # Add features indicating which events occurred on the same possession
   group_by(game_id, period) %>%
   mutate(is_first_event_of_possession = case_when(possession_changed == 1 ~ 1,
@@ -108,7 +108,7 @@ data = data_raw %>%
 # Create data frame that contains the match listing and final scores for ease of lookup if needed
 # Also include how many goals were scored by each team on powerplay/shorthand
 womens_match_results = data %>% 
-  group_by(game_id, game_date, home_team, away_team) %>%
+  group_by(game_id, competition, game_date, home_team, away_team) %>%
   summarize(home_score = max(home_team_goals),
             away_score = max(away_team_goals),
             home_goals_minus2 = sum(event == 'Goal' & home_event == 1 & skater_advantage == -2),
