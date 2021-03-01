@@ -1,6 +1,7 @@
 
 ## GG RINK FUNCTION
-
+HEX_BLUE = '#dbdbff'
+HEX_RED = '#ffdbdb'
 # Add function to generate circle dataframe to add to ggplot
 # Credit: https://stackoverflow.com/questions/6862742/draw-a-circle-with-ggplot2.
 circleFun <- function(center = c(0,0),diameter = 1, npoints = 100){
@@ -18,8 +19,7 @@ bottom_right = circleFun(center = c(172,28), diameter = 56) %>% filter(x >= 172,
 top_right = circleFun(center = c(172,57), diameter = 56) %>% filter(x >= 172, y >= 57)
 
 # Write rink function to use as border for other plots:
-# TODO centre plot titles
-custom_rink = function() {
+custom_rink = function(line_opacity = NULL) {
   list(
     theme_minimal(),
     theme(panel.grid.major = element_blank(), 
@@ -28,11 +28,12 @@ custom_rink = function() {
           axis.text.y = element_blank(),
           plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)),
-    geom_segment(x = GOAL_LINE_1_X, y = 5.5, xend = GOAL_LINE_1_X, yend = Y_MAX - 5.5, size = 1, colour = 'red', alpha = 0.3), 
-    geom_segment(x = BLUE_LINE_1_X, y = 0, xend = BLUE_LINE_1_X, yend = Y_MAX, size = 2, colour = 'blue', alpha = 0.3),
-    geom_segment(x = CENTRE_X, y = 0, xend = CENTRE_X, yend = Y_MAX, size = 2, colour = 'red', alpha = 0.3),
-    geom_segment(x = BLUE_LINE_2_X, y = 0, xend = BLUE_LINE_2_X, yend = Y_MAX, size = 2, colour = 'blue', alpha = 0.3), 
-    geom_segment(x = GOAL_LINE_2_X, y = 5.5, xend = GOAL_LINE_2_X, yend = Y_MAX - 5.5, size = 1, colour = 'red', alpha = 0.3),
+    # Draw zone lines
+    geom_segment(x = GOAL_LINE_1_X, y = 5.5, xend = GOAL_LINE_1_X, yend = Y_MAX - 5.5, size = 1, colour = HEX_RED), 
+    geom_segment(x = BLUE_LINE_1_X, y = 0, xend = BLUE_LINE_1_X, yend = Y_MAX, size = 2, colour = HEX_BLUE),
+    geom_segment(x = CENTRE_X, y = 0, xend = CENTRE_X, yend = Y_MAX, size = 2, colour = HEX_RED),
+    geom_segment(x = BLUE_LINE_2_X, y = 0, xend = BLUE_LINE_2_X, yend = Y_MAX, size = 2, colour = HEX_BLUE), 
+    geom_segment(x = GOAL_LINE_2_X, y = 5.5, xend = GOAL_LINE_2_X, yend = Y_MAX - 5.5, size = 1, colour = HEX_RED),
     # Draw outside of rink
     geom_segment(x = CURVE_START_X_1 -1, y = 0, xend = CURVE_START_X_2 + 1, yend = 0, size = 1),
     geom_segment(x = CURVE_START_X_1 -1 , y = Y_MAX, xend = CURVE_START_X_2+1, yend = Y_MAX, size = 1),
