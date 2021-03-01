@@ -16,16 +16,31 @@ passes = data %>%
                                  x_coordinate > BLUE_LINE_2_X & x_coordinate <= GOAL_LINE_2_X ~ 'offensive_zone',
                                  x_coordinate > GOAL_LINE_2_X ~ 'behind_offensive_goal'),
          pass_length = sqrt((x_coordinate - x_coordinate_2)^2 + (y_coordinate - y_coordinate_2)^2),
-         pass_gradient = (y_coordinate_2 - y_coordinate) / (x_coordinate_2 - x_coordinate),
-         pass_angle = atan(pass_gradient) * 180 / pi,
-         y_coordinate_sym = ifelse(y_coordinate < Y_MAX/2, y_coordinate, Y_MAX - y_coordinate),
-         y_coordinate_2_sym = ifelse(y_coordinate < Y_MAX/2, y_coordinate_2, Y_MAX - y_coordinate_2)) %>%
+         dist_x_forward = x_coordinate_2 - x_coordinate,
+         dist_y_up = y_coordinate_2 - y_coordinate, 
+         pass_gradient = abs(dist_y_up)/abs(dist_x_forward),
+         pass_angle_rad = case_when(dist_x_forward > 0 & dist_y_up > 0 ~ atan(pass_gradient),
+                                    dist_x_forward < 0 & dist_y_up > 0 ~ pi - atan(pass_gradient),
+                                    dist_x_forward < 0 & dist_y_up < 0 ~ pi + atan(pass_gradient),
+                                    dist_x_forward > 0 & dist_y_up < 0 ~ 2*pi - atan(pass_gradient),
+                                    dist_x_forward == 0 & dist_y_up > 0 ~ pi/2,
+                                    dist_x_forward < 0 & dist_y_up == 0 ~ pi,
+                                    dist_x_forward == 0 & dist_y_up < 0 ~ 3/2 * pi,
+                                    dist_x_forward > 0 & dist_y_up == 0 ~ 0,
+                                    dist_x_forward == 0 & dist_y_up == 0 ~ 0),
+         pass_angle = 180/pi * pass_angle_rad,
+         y_coordinate_sym = ifelse(y_coordinate > Y_MAX/2, y_coordinate, Y_MAX - y_coordinate),
+         y_coordinate_2_sym = ifelse(y_coordinate >  Y_MAX/2, y_coordinate_2, Y_MAX - y_coordinate_2),
+         dist_y_up_sym = abs(dist_y_up),
+         pass_angle_sym = ifelse(y_coordinate < Y_MAX/2, pass_angle, 360 - pass_angle)) %>%
   ungroup()
 
 # Format data to only contain features that will be used in kmeans
 # Using symmetrical passes, so all passes as if they were originating at bottom of screen.
 passes_kmeans_data = passes %>% 
-  select(x_coordinate, y_coordinate_sym, x_coordinate_2, y_coordinate_2_sym, pass_length)
+  mutate(attacking_zone = ifelse(x_coordinate >= BLUE_LINE_2_X, 1, 0)) %>%
+  select(x_coordinate, y_coordinate_sym, x_coordinate_2, y_coordinate_2_sym, 
+         pass_length, pass_angle_sym, dist_x_forward, dist_y_up_sym, attacking_zone) 
 
 # Perform clustering
 pass_clusters = kmeans(passes_kmeans_data, NUM_CLUSTERS, iter.max = KMEANS_ITER_MAX)
@@ -63,7 +78,8 @@ data_no_passes = data %>%
   filter(event_number %!in% passes_added_cluster$event_number)
 
 data_cluster_added = data_no_passes %>%
-  bind_rows(passes_added_cluster)
+  bind_rows(passes_added_cluster) %>%
+  arrange(event_number)
 
 # Plot showing clusters
 ggplot(passes_added_cluster %>% filter(cluster %% 2 == 1), aes(x = x_coordinate, y = y_coordinate)) + 
