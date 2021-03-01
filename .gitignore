@@ -40,3 +40,9 @@ vignettes/*.pdf
 
 # Cluster images
 cluster_images/*
+
+# Don't commit .rda
+*.RData
+
+# RMarkdown files
+report_files/*
