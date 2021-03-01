@@ -5,6 +5,7 @@
 NUM_CLUSTERS = 25
 KMEANS_ITER_MAX = 100
 CLUSTER_DIAGRAM_DIR = 'cluster_images/'
+GENERATE_CLUSTER_IMAGES = TRUE
 
 # Creating pass clusters:
 passes = data %>%
@@ -83,17 +84,17 @@ data_cluster_added = data_no_passes %>%
 
 # Plot showing clusters
 ggplot(passes_added_cluster %>% filter(cluster %% 2 == 1), aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = event),
                arrow = arrow(length = unit(0.2, "cm"))) + 
-  facet_wrap(~cluster, ncol = 5) + 
+  facet_wrap(~cluster, ncol = 4) + 
   labs(title = 'Pass Clusters',
        subtitle = 'Pass Clusters originating in bottom half of ice only, remaining are symmetrical',
        x = "",
        y = "")
 
 ggplot(passes_added_cluster %>% filter(cluster %% 2 == 0), aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = event),
                arrow = arrow(length = unit(0.2, "cm"))) + 
   facet_wrap(~cluster, ncol = 5) + 
@@ -105,7 +106,7 @@ ggplot(passes_added_cluster %>% filter(cluster %% 2 == 0), aes(x = x_coordinate,
 
 # Plot showing centres only
 ggplot(cluster_summaries %>% filter(cluster %% 2 == 1), aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster)),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   facet_wrap(~cluster, ncol = 5) + 
@@ -116,7 +117,7 @@ ggplot(cluster_summaries %>% filter(cluster %% 2 == 1), aes(x = x_coordinate, y 
   guides(colour = FALSE)
 
 ggplot(cluster_summaries %>% filter(cluster %% 2 == 0), aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster)),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   facet_wrap(~cluster, ncol = 5) + 
@@ -126,36 +127,61 @@ ggplot(cluster_summaries %>% filter(cluster %% 2 == 0), aes(x = x_coordinate, y 
        y = "") + 
   guides(colour = FALSE)
 
-# Save images containing only a specific cluster mean
-# TODO rewrite this using walk
-for (cl in 1:(NUM_CLUSTERS*2)) {
-  
-  plot = ggplot(cluster_summaries %>% filter(cluster == cl), aes(x = x_coordinate, y = y_coordinate)) + 
-    custom_rink() + 
-    geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2),
-                 arrow = arrow(length = unit(0.8, "cm")), size = 6) + 
-    theme(axis.title.x = element_blank(),
-          axis.title.y = element_blank())
+if (GENERATE_CLUSTER_IMAGES) { 
 
-  title = paste0(CLUSTER_DIAGRAM_DIR, 'cluster_', cl, '.png')
-  ggsave(title, plot, height = 8, width = 10)
+  # Save images containing only a specific cluster mean
+  cluster_images = data.frame(cluster = 1:(NUM_CLUSTERS*2), filename = "blank")
+  for (cl in 1:(NUM_CLUSTERS*2)) {
+    
+    plot = ggplot(cluster_summaries %>% filter(cluster == cl), aes(x = x_coordinate, y = y_coordinate)) + 
+      custom_rink(0.3) + 
+      geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2),
+                   arrow = arrow(length = unit(0.2, "cm")), colour = 'purple', size = 2) + 
+      geom_segment(data = passes_added_cluster %>% filter(cluster == cl), 
+                   aes(x = x_coordinate, y = y_coordinate, xend = x_coordinate_2, yend = y_coordinate_2), 
+                   arrow = arrow(length = unit(0.2, "cm")),
+                   alpha = 0.1) + 
+      theme(axis.title.x = element_blank(),
+            axis.title.y = element_blank())
+  
+    title = paste0(CLUSTER_DIAGRAM_DIR, 'cluster_', cl, '.png')
+    cluster_images[cl, 'filename'] = title
+    ggsave(title, plot, height = 8, width = 10)
+    
+  }
   
 }
 
 # Plot showing all pass clusters simultaneously
-ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
-  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster)),
-               arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
-  labs(title = 'All Pass Clusters',
-       subtitle = 'Team Attacking Right Goal',
+ggplot(passes_added_cluster, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.003) + 
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2),
+               arrow = arrow(length = unit(0.5, "cm")), alpha = 0.01, colour = 'black') +
+  labs(title = 'All passes',
+       subtitle = 'Team Attacking ----->',
        x = "",
        y = "") + 
   guides(colour = FALSE)
 
+ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.003) + 
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster)),
+               arrow = arrow(length = unit(0.5, "cm")), size = 2) +
+  geom_label(aes(label = cluster)) + 
+  labs(title = 'All Pass Clusters',
+       subtitle = 'Team Attacking ----->',
+       x = "",
+       y = "") + 
+  guides(colour = FALSE)
+
+clusters_originating_defensive_zone = cluster_summaries %>% filter(x_coordinate <= BLUE_LINE_1_X)
+clusters_originating_neutral_zone = cluster_summaries %>% filter(x_coordinate > BLUE_LINE_1_X & x_coordinate <= BLUE_LINE_2_X)
+clusters_originating_offensive_zone = cluster_summaries %>% filter(x_coordinate > BLUE_LINE_2_X)
+
+
 # Pass clusters with frequency
 ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster), alpha = passes),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   labs(title = 'All Pass Clusters, weighted by Frequency',
@@ -164,9 +190,19 @@ ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) +
        y = "") + 
   guides(colour = FALSE)
 
+ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.003) + 
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = passes, alpha = passes),
+               arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
+  labs(title = 'All Pass Clusters, weighted by Frequency',
+       subtitle = 'Team Attacking Right Goal',
+       x = "",
+       y = "") + 
+  scale_colour_gradient2(low = '#ffaf7b', mid = '#d76d77', high = '#3a1c71', midpoint = 500)
+
 # Pass clusters with accuracy
 ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster), alpha = accuracy),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   labs(title = 'All Pass Clusters, weighted by Accuracy',
@@ -175,9 +211,9 @@ ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) +
        y = "") + 
   guides(colour = FALSE)
 
-# Pass clusters that are shot assists
+  # Pass clusters that are shot assists
 ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster), alpha = shot_assist),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   labs(title = 'All Pass Clusters, weighted by Shot Assists',
@@ -188,7 +224,7 @@ ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) +
 
 # Pass clusters that are goal assists
 ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster), alpha = goal_assist),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   labs(title = 'All Pass Clusters, weighted by Goal Assists',
@@ -199,7 +235,7 @@ ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) +
 
 # Pass clusters that are the last pass in the possession (either because they are incomplete or lead to turnovers)
 ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) + 
-  custom_rink() + 
+  custom_rink(0.003) + 
   geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster), alpha = is_last_event_of_possession),
                arrow = arrow(length = unit(0.5, "cm")), size = 2) + 
   labs(title = 'All Pass Clusters, weighted by Is Last Event of Possession',
@@ -211,6 +247,3 @@ ggplot(cluster_summaries, aes(x = x_coordinate, y = y_coordinate)) +
 # Observations:
 #' horizontal and backwards passes appear to be high accuracy
 #' passese in defensive third much more frequent than attacking
-
-# Exploring pass accuracy
-ggplot(cluster_summaries, aes(x = pas))
