@@ -3,6 +3,7 @@
 
 # Build features
 shot_data = data %>%
+  ungroup() %>%
   clean_names() %>%
   filter(event %in% c('Shot', 'Goal')) %>%
   mutate(goal = ifelse(event == 'Goal', 1, 0)) %>%
