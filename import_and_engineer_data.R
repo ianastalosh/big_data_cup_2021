@@ -56,6 +56,8 @@ data = data_raw %>%
          skater_advantage = ifelse(home_event, home_team_skaters - away_team_skaters, away_team_skaters - home_team_skaters)) %>%
   group_by(game_id, period) %>%
   mutate(previous_event_type = lag(event),
+         previous_event_2 = lag(event, n = 2),
+         previous_event_3 = lag(event, n = 3),
          previous_event_team = lag(team),
          possession_changed = ifelse(previous_event_team != team, 1, 0),
          previous_event_player = lag(player),
@@ -81,6 +83,9 @@ data = data_raw %>%
          following_three_detail_2 = lead(detail_2, n = 3),
          time_to_next_event = seconds_remaining - following_seconds_remaining,
          shot_attempt = ifelse(event %in% c('Shot', 'Goal'), 1, 0),
+         is_assisted_shot = ifelse(previous_event_type == 'Play', 1, 0),
+         is_assisted_shot_2 = ifelse(previous_event_2 == 'Play', 1, 0),
+         is_assisted_shot_3 = ifelse(previous_event_3 == 'Play', 1, 0),
          shot_blocked = ifelse(detail_2 == 'Blocked', 1, 0),
          shot_assist = ifelse(following_event_type %in% c('Shot', 'Goal'), 1, 0),
          shot_assist_blocked = ifelse(following_detail_2 == 'Blocked', 1, 0),
