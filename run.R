@@ -17,8 +17,8 @@ source('custom_rink_function.R')
 # Import data
 source('import_and_engineer_data.R')
 source('create_clusters.R')
-source('analyse_possessions.R')
 source('xg_model.R')
+source('analyse_possessions.R')
 
 # Save environment to output
 save.image(file = 'data/envir_image.RData')
