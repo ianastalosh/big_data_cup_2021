@@ -19,7 +19,7 @@ bottom_right = circleFun(center = c(172,28), diameter = 56) %>% filter(x >= 172,
 top_right = circleFun(center = c(172,57), diameter = 56) %>% filter(x >= 172, y >= 57)
 
 # Write rink function to use as border for other plots:
-custom_rink = function(line_opacity = NULL) {
+custom_rink = function(line_opacity = NULL, crease_alpha = 1) {
   list(
     theme_minimal(),
     theme(panel.grid.major = element_blank(), 
@@ -28,6 +28,11 @@ custom_rink = function(line_opacity = NULL) {
           axis.text.y = element_blank(),
           plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)),
+    # Add crease on right side of ice
+    geom_rect(xmin = GOAL_LINE_2_X - CREASE_HEIGHT, xmax = GOAL_LINE_2_X,
+              ymin = Y_MAX/2 - CREASE_WIDTH/2, ymax = Y_MAX/2 + CREASE_WIDTH/2,
+              fill = HEX_BLUE, colour = HEX_RED,
+              alpha = crease_alpha),
     # Draw zone lines
     geom_segment(x = GOAL_LINE_1_X, y = 5.5, xend = GOAL_LINE_1_X, yend = Y_MAX - 5.5, size = 1, colour = HEX_RED), 
     geom_segment(x = BLUE_LINE_1_X, y = 0, xend = BLUE_LINE_1_X, yend = Y_MAX, size = 2, colour = HEX_BLUE),
