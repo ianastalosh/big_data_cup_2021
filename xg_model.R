@@ -2,13 +2,13 @@
 # Build simple XG model
 
 # Build features
-shot_data = data %>%
+shot_data = all_events %>%
   ungroup() %>%
   clean_names() %>%
   filter(event %in% c('Shot', 'Goal')) %>%
   mutate(goal = ifelse(event == 'Goal', 1, 0)) %>%
   select(x_coordinate, y_coordinate, distance_to_goal, angle_deg_to_goal, 
-         time_difference, goal) %>%
+         time_difference, skater_situation, goal) %>%
   mutate(behind_goal = ifelse(x_coordinate > GOAL_LINE_2_X, 1, 0))
   
 # Train model
@@ -51,3 +51,15 @@ data_clusters_xg_added = data_no_shots %>%
   mutate(following_xg = lead(shot_xg),
          following_two_shot_xg = lead(shot_xg, n = 2),
          following_three_shot_xg = lead(shot_xg, n = 3))
+
+shot_xg = predict(xg_glm, shot_data, 'response')
+
+all_events_with_shot_data = all_events %>% 
+  ungroup() %>%
+  filter(event %in% c('Shot', 'Goal')) %>% 
+  mutate(shot_xg = shot_xg)
+
+events_without = all_events %>%
+  filter(event %!in% c('Shot', 'Goal'))
+
+combined_events = bind_rows(events_without, all_events_with_shot_data) %>% arrange(event_number)
