@@ -109,6 +109,11 @@ data = data_raw %>%
          is_first_event_of_possession = ifelse(is.na(is_first_event_of_possession), 0, is_first_event_of_possession)) %>%
   group_by(game_id, period, possession_number) %>% 
   mutate(is_last_event_of_possession = ifelse(row_number() == n(), 1, 0))
+
+all_events = data
+
+# Make 5 on 5 only
+data = data %>% filter(home_team_skaters == 5, away_team_skaters == 5)
          
 # Create data frame that contains the match listing and final scores for ease of lookup if needed
 # Also include how many goals were scored by each team on powerplay/shorthand
