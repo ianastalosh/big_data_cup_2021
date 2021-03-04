@@ -64,7 +64,7 @@ match_possessions = data_clusters_xg_added %>%
 
 
 # What is the average starting point of possessions?
-coord_plot = data_cluster_xg_added %>%
+coord_plot = data_clusters_xg_added %>%
   group_by(possession_number) %>%
   mutate(is_start = ifelse(row_number() == 1, 1, 0)) %>%
   select(is_start, x_coordinate, y_coordinate)
