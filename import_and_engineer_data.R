@@ -16,6 +16,7 @@ names(team_codes) = team_names
 # Engineer features that may be useful
 data = data_raw %>%
   clean_names() %>%
+  filter(event != 'Zone Entry') %>%
   mutate(event_number = row_number(),
          home_team_code = team_codes[home_team],
          away_team_code = team_codes[away_team],
