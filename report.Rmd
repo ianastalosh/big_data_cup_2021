@@ -1,0 +1,376 @@
+---
+title: \vspace{-1.5cm} Teamwork Makes the Dream Work - Determining Which Pass Types Create High Quality Chances in Women's Hockey
+author: "Ian Astalosh"
+geometry: "left=2cm, right=2cm, top=2cm, bottom=2cm"
+output: 
+  pdf_document:
+    number_sections: true
+---
+
+\vspace{-8truemm}
+
+```{r Set Options, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      fig.width = 6, 
+                      fig.height = 3,
+                      fig.align = 'center')
+```
+
+
+```{r}
+library(plyr) # mapvalues, to use the cluster number
+library(tidyverse) # duh
+library(janitor) # clean variable names to snakecase
+library(lubridate) # date time formatting
+library(zoo) # Mainly for na.locf and creating rolling functions
+library(factoextra) # kmeans
+library(gridExtra) # side by side plots
+library(ggrepel) # Stop plot points overlapping
+
+# Load all trained/saved sets (so don't have to process when compiling)
+load('data/envir_image.RData')
+```
+
+# Introduction
+Hockey is a team sport, and the fastest way to move the puck up the ice has always been by passing between teammates. However, not all passes are created equal. Some passes keep possession, but don't do anything to increase a team's chances of scoring. Some passes are more to the point, and while have they have a great chance of leading to a shot if successful, also have a high chance of failing. The aim of this report is to determine which passes contribute the most to generating shots on goal, which famously, lead to actual goals. If certain passes or sequences were determined to provide a greater value, coaches could implement such strategies into their gameplanning and work on them more in practice to exploit that advantage. 
+
+The way we will do this is outlined below:
+
+1. Group all available passes into pass clusters that can be compared and contrasted
+2. Build an Expected Goals model specifically for the women's game to quantify the quality of shots
+3. Develop a method of valuing individual passes in a given possession, which will then be used to assess the value of passes in each cluster
+
+# Methodology
+
+## Data
+The data utilised is the combined sets of International, Collegiate and NWHL event data provided by Stathletes for this competition. Only events that took place with the teams at even strength (5 on 5) are considered, due to the woman advantage likely having a significant effect on the way the game plays out in that period. Examining the passing behaviour of both the power play and short-handed team could definitely be an interesting piece of research, but are beyond the scope of this report. 
+
+This leaves us with 38,060 events including 9972 plays and 5096 incomplete plays (15,096 total) as well as 2493 shots and 85 goals. 
+
+## Categorizing Types of Passes
+In order to determine which types of passes lead to scoring chances, we firstly need a way to distinguish between different pass types. Clustering the passes firstly simplifies the analysis, as instead of looking at 15,000 different passes, we can focus in on a much smaller number of categories of naturally similar passes, as seen below: (Note that in all plots the possession team is attacking the right hand side)
+
+```{r, fig.height = 2, fig.width=6}
+all_passes_plot = ggplot(passes, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink() + 
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = event),
+               arrow = arrow(length = unit(0.2, "cm")), alpha = 0.25) + 
+  labs(title = 'Every Pass Plotted',
+       x = '',
+       y = '',
+       colour = 'Event Type') +
+  guides(colour = FALSE)
+
+all_cluster_summaries_plot = ggplot(cluster_summaries_side_plot, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.002) +
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = as.factor(cluster)),
+               arrow = arrow(length = unit(0.5, "cm")), size = 1, alpha = 0.7) + 
+  labs(title = "Pass Clusters",
+       x = '',
+       y = '',
+       colour = 'Frequency') + 
+  guides(colour = FALSE)
+
+grid.arrange(all_passes_plot, all_cluster_summaries_plot, ncol = 2)
+
+```
+
+In order to generate these clusters, a k-means clustering algorithm is used. K-means essentially groups together similar observations based on their characteristics, which in our case here is the start and end locations of the pass, the pass length, the pass angle, and the distance from the centre of the ice. This type of clustering idea has been adopted several times for the men's game, in particular by Ryan Stimson and Daniel Weinberger on Hockey Graphs, and David Yu at the 2020 Columbus Blue Jackets Hockey Analytics Conference. 
+
+We largely follow Yu's approach to perform the clustering, which involves firstly mirroring all passes originating in the top half of the ice. Then, the k-means algorithm is performed, creating 25 clusters. The choice of 25 clusters (significantly less than the 100 Yu used) was based mostly on the sample size we had available as a number large enough to create distinctly different groups, but not so many the membership of those groups would be too small to do anything with. Unlike Yu, we do not unflip them after clustering to create an identical, symmetrical cluster. We assume that passes on the left side of the ice are not fundamentally different to their mirror images on the right, and so we treat them as part of the same category. 
+
+Below we display our 25 pass clusters, representing the 25 average types of passes in women's hockey. Each plot shows:
+
+- The 'average pass' that the cluster represents. There are two arrows, highlighting the pass from both sides of the ice.
+- All passes in the dataset that belong to that cluster as a shadow behind the average pass.
+- The number of passes contained in that cluster. Some pass types are definitely more frequent than others!
+
+```{r, fig.height = 5, fig.width=8}
+cluster_summaries_side_plot = cluster_summaries_side %>%
+  mutate(label = paste("Cluster", cluster))
+
+passes_added_cluster_plot = passes_added_cluster %>%
+  mutate(label = paste("Cluster", cluster))
+
+cluster_summaries_side_plot$label = factor(cluster_summaries_side_plot$label, levels = unique(cluster_summaries_side_plot$label))
+passes_added_cluster_plot$label = factor(passes_added_cluster_plot$label, levels = unique(cluster_summaries_side_plot$label))
+
+ggplot(cluster_summaries_side_plot, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.002) +
+  geom_segment(data = passes_added_cluster_plot, aes(xend = x_coordinate_2, yend = y_coordinate_2),
+               arrow = arrow(length = unit(0.2, "cm")), alpha = 0.05, colour = 'gray') + 
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = passes),
+               arrow = arrow(length = unit(0.1, "cm")), size = 1.5) + 
+  labs(title = "Pass Clusters in Women's Hockey",
+       x = '',
+       y = '',
+       colour = 'Frequency') + 
+  facet_wrap(~label, ncol = 5) + 
+  scale_colour_gradient2(high = '#0D0887FF', mid = '#CC4678FF', low = '#F0F921FF', midpoint = 300)
+```
+
+We can see how our clusters roughly resemble the passes we see all the time in hockey games. Clusters 9 and 12 contains stretch passes, long breakout passes that aim to hit an attacker near the blue line. Cluster 21 contains cutbacks from the goal line to a waiting defenseman at the blue line. This is good, as the algorithm is able to identify passes commonly seen in game action. The most common passes on the ice originate from behind the possession team's own goal, as teams begin their attack (Clusters 1 and 2). The most common passes in the offensive zone are from the goal line straight back to the blue line, or behind the offensive goal (Clusters 21 and 23).
+
+Examining these clusters is interesting on their own, as they can give us a feel for how teams or players tend to play. However, in this report we are not interested in tendencies, but rather how these passes increase the chances of scoring. 
+
+## Building our xG Model
+In order to evaluate which types of passes create better shots, we need a way of actually quantifying those shots. For this, we build a simple xG model utilising women's data. The model is a generalised linear model with a logistic link function, which generates the likelihood of that shot being a goal. The features in the model are:
+
+- x coordinate of the shot
+- y coordinate of the shot
+- distance to goal
+- angle in degrees from the shot location to the goal
+- the time difference between the shot and the previous event in the data
+- an indicator of whether the shot location was behind the goal line
+
+A home team indicator was not added as it is assumed there was no home ice advantage due to all international games taking place in South Korea, and all NWHL games taking place in a bubble with no live fans. 
+
+The below plot shows the expected goals for shots within the offensive zone, and these values are used in the next section to evaluate the quality of each chance.
+
+```{r, fig.height=2, fig.width=4}
+
+test_data_raw = expand.grid(x_coordinate = 125:200,
+                        y_coordinate = 0:85)
+
+bottom_right_form = bottom_right %>% set_names(c('x_coordinate', 'y_coordinate'))
+top_right_form = top_right %>% set_names(c('x_coordinate', 'y_coordinate'))
+
+bottom_right_lm = lm(y_coordinate ~ poly(x_coordinate, 3), data = bottom_right_form)
+top_right_lm = lm(y_coordinate ~ poly(x_coordinate, 3), data = top_right_form)
+
+predicted_y_min = predict(bottom_right_lm, test_data)
+predicted_y_max = predict(top_right_lm, test_data)
+
+test_data = test_data_raw %>% 
+  mutate(y_min = predicted_y_min,
+         y_max = predicted_y_max,
+         keep = case_when(x_coordinate <= 175 ~ 1,
+                          x_coordinate > 175 & y_coordinate >= y_min & y_coordinate <= y_max ~ 1,
+                          TRUE ~ 0)) %>%
+  filter(keep == 1) %>% 
+  mutate(distance_to_goal = sqrt((x_coordinate - GOAL_LOCATION_X)^2 + (y_coordinate - GOAL_LOCATION_Y)^2),
+         gradient = abs(y_coordinate - GOAL_LOCATION_Y)/(x_coordinate - GOAL_LOCATION_X),
+         angle_rad = atan(gradient),
+         angle_deg_to_goal = (angle_rad * 180/pi),
+         angle_deg_to_goal = ifelse(is.na(angle_deg_to_goal), 90, angle_deg_to_goal),
+         score_difference = 0,
+         skater_situation = 'even_strength',
+         time_difference = 2,
+         behind_goal = ifelse(x_coordinate > GOAL_LINE_2_X, 1, 0))
+
+predicted = predict(xg_glm, test_data, 'response')
+
+total = cbind(test_data, predicted)
+ggplot(total, aes(x = x_coordinate, y = y_coordinate)) + 
+  geom_tile(aes(fill = predicted)) + 
+  custom_rink(0.003, 0.001) + 
+  xlim(c(124,201)) + 
+  scale_fill_gradient2(high = '#0D0887FF', mid = '#CC4678FF', low = '#F0F921FF', midpoint = 0.15) + 
+  labs(title = 'xG by Shot Location',
+       x = '',
+       y = '',
+       fill = 'xG')
+
+```
+
+## A Novel Method of Quantifying Pass Value
+
+While more advanced models such as xThreat have been proposed to quantify the impact of individual events, we utilise a simpler approach to determine which passes add expected goals. The approach is inspired Statsbomb's xGChain and xGBuildup, which isolates possessions into the events that comprise the possession. However, instead of then attributing any expected goals to all players involved, we attribute a weighted amount of expected goals to the passes involved, as we are interested in their value. 
+
+The approach can be broken into several parts:
+
+**1. Define what constitutes a possession.**
+
+I define a possession as the time between when a team obtains possession of the puck, to when they either lose it or deliberately cede it (ie. when a team takes a shot. If a team takes a shot but gathers the rebound, this should count as a new possession, because they had already chosen to end it by taking the shot. No one takes a shot hoping it won't go in). An incomplete play that was recovered by the possessing team I counted as retaining possession, however.
+
+In short:
+
+- *Possession starting events:* Faceoff wins, takeaways, puck recoveries following a shot
+- *Possession ending events:* Takeaways, penalties, incomplete passes (that were recovered by opposing team), shots, goals.
+
+**2. Assign a value to that possession.**
+We create $PossessionXG$ which is simply the expected goals of any shot that took place on that possession (note by definition, a possession can only have a maximum of 1 shot). Possessions that do not contain a shot are assigned a value of 0.
+
+**3. Allocate a proportion of the possession value to each pass based on how close they were to the shot**.
+Individual passes within a possession are assigned a proportion of the total possession value based on how close they were to the shot taking place.The first pass of a 6 pass chain is important, but not as important as the pass immediately before the shot. The formula use to distribute the total possession value to each pass is given by:
+
+$$ IndividualPassValue = PossessionXG \times \frac{13 - n}{13}$$
+where $n$ is the number of passes between the current pass and the shot (ie. $n=0$ for the shot assist). 13 was chosen as the scaling factor because that was the most passes recorded on a single possession (a 41 second masterclass by the Toronto Six against the Minnesota Whitecaps that promptly ended in an... incomplete pass). 
+
+So, perhaps we had a particular sequence that was a Cluster 20 pass, followed by a Cluster 23 pass, followed by a Cluster 24 pass, which resulted in a shot with an xG value of 0.1. Then the value attributed to each pass would be:
+
+- Cluster 18 (the assist): 0.1
+- Cluster 23 (the pass to assist): 0.092
+- Cluster 20 (the pass to pass to assist): 0.085
+
+**4. Average over all clusters to determine the clusters average value in build up play**
+Once we have assigned values to each individual pass on each possession, we can average over all passes to determine which add the most value. ie.
+
+$$ AvgPassContribution = \frac{\sum^{cluster} IndividualPass Value}{n_{cluster}} $$
+
+where $n_{cluster}$ is the total number of passes categorized as having that cluster.
+
+This Cluster process will enable us to obtain a single value for each pass cluster, representing the contribution of that pass type to creating chances. 
+
+# Results
+We now put this into practice. We have 11,588 distinct match possessions available in our dataset, of which 2578 produced a shot. 
+
+
+```{r}
+match_possessions = data_clusters_xg_added %>%
+  group_by(game_date, game_id, period, skater_situation, score_situation, team, possession_number) %>% 
+  summarize(starting_time = max(seconds_remaining),
+            ending_time = min(seconds_remaining),
+            duration = starting_time - ending_time,
+            first_event = first(event),
+            last_event = last(event),
+            first_x = first(x_coordinate),
+            first_y = first(y_coordinate),
+            started_in_offensive_zone = ifelse(first_x > BLUE_LINE_2_X, 1, 0),
+            final_x = last(x_coordinate),
+            final_y = last(y_coordinate),
+            num_events = n(),
+            num_passes = sum(event %in% c('Play', 'Incomplete Play')),
+            num_shots = sum(event %in% c('Shot', 'Goal')),
+            num_dumps = sum(event == 'Dump In/Out'),
+            num_goals = sum(event == 'Goal'),
+            num_passes_def = sum(cluster %in% clusters_originating_defensive_zone$cluster),
+            num_passes_neutral = sum(cluster %in% clusters_originating_neutral_zone$cluster),
+            num_passes_off = sum(cluster %in% clusters_originating_offensive_zone$cluster),
+            shot_on_possession = ifelse(num_shots > 0, 1, 0),
+            goal_on_possession = ifelse(num_goals > 0, 1, 0),
+            shot_location_x = ifelse(num_shots > 0, max(x_coordinate, na.rm = TRUE), NA),
+            shot_location_y = ifelse(num_shots > 0, max(y_coordinate, na.rm = TRUE), NA),
+            shot_xg = ifelse(num_shots > 0, max(shot_xg, na.rm = TRUE), 0),
+            pass_cluster_sequence = paste0(cluster[!is.na(cluster)], collapse = ',')) %>%
+  arrange(possession_number)  %>%
+  ungroup()
+
+individual_pass_value = match_possessions %>%
+  separate(pass_cluster_sequence, sep = ',', into = as.character(1:13)) %>% 
+  pivot_longer(cols = c(as.character(1:13)), names_to = 'number_in_sequence', values_to = 'cluster') %>%
+  filter(!is.na(cluster)) %>% 
+  mutate(number_in_sequence = as.numeric(number_in_sequence)) %>%
+  group_by(possession_number) %>%
+  mutate(passes_before_shot = max(number_in_sequence) - number_in_sequence,
+         pass_value = shot_xg * (13 - passes_before_shot)/13)
+   
+average_value = individual_pass_value %>% 
+  filter(!is.na(pass_value)) %>% 
+  group_by(cluster) %>% 
+  summarize(number = n(), 
+            avg_value = mean(pass_value),
+            percentage_shot_assist = mean(passes_before_shot == 0 & pass_value != 0),
+            avg_position_in_sequence = mean(number_in_sequence)) %>% 
+  filter(cluster != "")
+
+ggplot(average_value, aes(x = number, y = avg_value)) + 
+   geom_point(aes(colour = as.factor(cluster), size = percentage_shot_assist)) + 
+  geom_text_repel(aes(label = cluster)) + 
+  theme_minimal() + 
+  guides(colour = FALSE) + 
+  labs(title = 'Cluster Average Pass Contribution vs Frequency',
+       x = 'Number of Passes in Cluster',
+       y = 'Average Pass Contribution',
+       size = '% of Shot Assists')
+
+```
+Unsurprisingly, the pass types that have the greatest value are the ones that occur in the offensive zone (Clusters 18 onwards). The highest valued passes in Clusters 23 and 24 direct the puck towards the goal, so it makes sense that they add the most value as they lead to the most dangerous shots. Somewhat surprisingly, the largest cluster, Cluster 20 (the pass from the goal line back to the blue line) has a comparatively low value per pass. This also makes sense as the puck goes further from the goal, but perhaps teams when stuck in the corner should look to fire to the middle or around the back rather than kicking it out.
+
+One thing to note here is the relationship between the accuracy of passes and value added. 
+
+```{r}
+cluster_accuracy = data_clusters_xg_added %>% 
+  filter(event %in% c('Play', 'Incomplete Play')) %>%
+  group_by(cluster) %>% 
+  summarize(passes = n(),
+            accuracy = mean(event == 'Play'))
+
+values_combined_accuracy = left_join(average_value %>% mutate(cluster = as.numeric(cluster)), cluster_accuracy, by = 'cluster')
+
+ggplot(values_combined_accuracy, aes(x = accuracy, y = avg_value)) + 
+  geom_point(aes(colour = as.factor(cluster))) +
+  geom_smooth() + 
+  geom_text_repel(aes(label = cluster)) + 
+  theme_minimal() + 
+  guides(colour = FALSE) + 
+  labs(title = 'Cluster Accuracy vs Cluster Average Pass Contribution',
+       x = 'Pass Accuracy',
+       y = 'Average Pass Contribution')
+```
+Just because a pass is a high percentage pass, and means you'll keep the puck, does not appear to mean it actually increases your chances of scoring a goal. The highest reward passes are also the highest risk, but teams could be encouraged to be more aggressive with the knowledge that a slight increase in goals could follow.
+
+From the original graph, it is clear the clusters that add the most value are the ones that have high shot assist percentages. This is, quite often they are the last pass before a shot is taken. If we want to look purely at the contribution in the build up to shots, we can remove all these shot assists and look only at the contribution of passes before that:
+
+```{r}
+average_value_buildup = individual_pass_value %>% 
+  filter(!is.na(pass_value),
+         !(passes_before_shot == 0 & pass_value != 0)) %>% 
+  group_by(cluster) %>% 
+  summarize(number = n(), 
+            avg_value = mean(pass_value),
+            percentage_shot_assist = mean(passes_before_shot == 0 & pass_value != 0),
+            avg_position_in_sequence = mean(number_in_sequence)) %>% 
+  filter(cluster != "")
+
+ggplot(average_value_buildup, aes(x = number, y = avg_value)) + 
+   geom_point(aes(colour = as.factor(cluster))) + 
+  geom_text_repel(aes(label = cluster)) + 
+  theme_minimal() + 
+  guides(colour = FALSE) + 
+  labs(title = 'Cluster Average Pass Contribution (Build Up Only) vs Frequency',
+       subtitle = 'No Shot Assists included',
+       x = 'Number of Passes in Cluster',
+       y = 'Average Pass Value')
+```
+With the shot assists removed, we can see how certain passes originating from the defensive and neutral zones are useful. Although the passes in the offensive zone still have the greatest value towards scoring, Clusters 9 and 12, stretch passes and breakout passes, also provide a significant amount of value, despite being smaller in their cluster size. This suggests that teams should longer, quicker passes when breaking out from their own end. 
+
+## Team Performance
+Now with a measure on the value of each pass type, we can group the data by team to see which teams got more and less value out of certain pass types than the average. Certain teams may excel at particular pass types due to their practice or particular strategies they are implementing. The below plots show which pass clusters that each NWHL team during the 2021 season either outperformed or underperformed their expected values.
+
+```{r, fig.height = 3, fig.width=8}
+average_value_only = average_value %>% 
+  select(cluster, avg_value)
+
+team_value = individual_pass_value %>% 
+  filter(!is.na(pass_value)) %>%
+  group_by(team, cluster) %>% 
+  summarize(number = n(), 
+            team_avg_value = mean(pass_value),
+            percentage_shot_assist = mean(passes_before_shot == 0 & pass_value != 0),
+            avg_position_in_sequence = mean(number_in_sequence)) %>% 
+  filter(cluster != "") %>% 
+  left_join(average_value_only, by = 'cluster') %>%
+  mutate(difference = team_avg_value - avg_value,
+         cluster = as.numeric(cluster)) %>%
+  left_join(cluster_summaries_side, by = "cluster") %>%
+  filter(team %in% c('Boston Pride', 'Buffalo Beauts', 'Connecticut Whale', 'Metropolitan Riveters', 'Minnesota Whitecaps', 'Toronto Six'),
+         abs(difference) > 0.001)
+
+ggplot(team_value, aes(x = x_coordinate, y = y_coordinate)) + 
+  custom_rink(0.002) +
+  geom_segment(aes(xend = x_coordinate_2, yend = y_coordinate_2, colour = difference),
+               arrow = arrow(length = unit(0.5, "cm")), size = 1.5) + 
+  labs(title = "NWHL Team Pass Values vs Average",
+       x = '',
+       y = '',
+       colour = 'Greater than Average?') + 
+  scale_colour_gradient2(low = 'red', high = 'blue', mid = 'white', midpoint = 0) + 
+  facet_wrap(~team, ncol = 3)
+
+
+```
+Teams like Boston and Toronto appeared to get slightly more value towards shots on passes building out from the back. Minnesota appears to have increased value on passes in the offensive zone. Tools like this could be used by teams not just to see what particular teams like to employ when they attack, but also *what they are actually good at*.  
+
+# Conclusion
+The purpose of this report was to classify and analyse passes in women's hockey, to determine which passes are played most often and explore how they create chances. Creating our 25 pass clusters provides a framework to do this, showing that passes in the offensive zone that get the puck as close to the goal as possible add more value than passes that maintain possession. These passes may be high risk as they have lower accuracy, but if teams want to maximize their chances on goal, they appear to be risks they should take. Using this work, coaches could create better tactical gameplans on how to attack, focussing on the passing lanes which provide the highest chance of scoring. With more time and data, looking at the effect of particular passing sequences (ie. two or three pass combinations) would be a natural follow up, as well as incorporating this with tracking data and determining the most valuable passes when the defense is configured in a particular way.
+
+# References
+
+1. Stimson, R 2017, *Identifying Player Styles With Clustering*, Hockey Graphs, viewed 5 March 2021, <https://hockey-graphs.com/2017/04/04/identifying-player-types-with-clustering/>
+2. Weinberger, D 2019, *Visualizing and Quantifying Passing on the Power Play*, Hockey Graphs, viewed 4 March 2021, <https://hockey-graphs.com/2019/09/04/visualizing-and-quantifying-passing-on-the-power-play/#more-23791>
+3. Yu, D & Columbus Blue Jackets 2020, *CBJ 2020 Hockey Analytics Conference*, viewed 5 March 2021, <https://www.youtube.com/watch?v=TENd93QJt-8&t=7924s>
+4. Lawrence, T 2018, *Introducing xGChain and xGBuildup*, viewed 5 March 2021, <https://statsbomb.com/2018/08/introducing-xgchain-and-xgbuildup/>
+
