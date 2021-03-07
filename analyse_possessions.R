@@ -17,9 +17,25 @@ create_list_of_couplets = function(string) {
   return(as.list(pairs))
 }
 
+create_pass_list = function(string) {
+  
+  vector = strsplit(string, split = ',') %>% unlist() %>% as.numeric()
+  
+  if (length(vector) <= 1) {
+    return(NA)
+  }
+  
+  return(as.list(vector))
+}
+
+create_pass_vectors = function(vector) {
+  outcome = lapply(vector, create_pass_list)
+  return(outcome)
+}
+
 create_pairs_vectors = function(vector) {
   
-  outcome = lappy(vector, create_list_of_couplets)
+  outcome = lapply(vector, create_list_of_couplets)
   return(outcome)
   
 }
