@@ -2,6 +2,10 @@
 
 Thanks for coming to my Big Data Cup repo! Before starting this project, I had only watched two NHL games and each Mighty Ducks movie five or so times each. 
 
+The final report submitted is contained in `report.pdf`. I use a k-means clustering approach to group pass types present in women's hockey. I then attempted to determine which pass types have the greatest contribution to shot attempts, be it directly or in the build up play preceding it. It didn't quite turn out how I wanted it to because I ran out of time, and I had to change my idea a few times (originally I wanted to look at passing combinations, ie. two-pass couplets, and see their effect. However, the sample size was too small and the numbers of passing combinations was too low to determine anything useful). In any case, I still think there's the pieces of an interesting idea here!
+
+Unsurprisingly, I found passes in the offensive zone have the greatest contribution to shots, and in particular passes that land the puck near the slot. This is well known already, and have been referred to as 'high danger' passes in other papers. We also noted that stretch passes, quickly moving the puck from the defensive zone to the attacking blue line also contributed to high-ish numbers of expected goals per pass, Passes from the goal line back to the blue line also appeared to be over-represented for their value.
+
 Below contains the data information as specified by Stathletes, who provided the data:
 
 <h1>Dataset</h1>
