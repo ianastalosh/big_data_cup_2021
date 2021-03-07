@@ -40,8 +40,8 @@ custom_rink = function(line_opacity = NULL, crease_alpha = 1) {
     geom_segment(x = BLUE_LINE_2_X, y = 0, xend = BLUE_LINE_2_X, yend = Y_MAX, size = 2, colour = HEX_BLUE), 
     geom_segment(x = GOAL_LINE_2_X, y = 5.5, xend = GOAL_LINE_2_X, yend = Y_MAX - 5.5, size = 1, colour = HEX_RED),
     # Draw outside of rink
-    geom_segment(x = CURVE_START_X_1 -1, y = 0, xend = CURVE_START_X_2 + 1, yend = 0, size = 1),
-    geom_segment(x = CURVE_START_X_1 -1 , y = Y_MAX, xend = CURVE_START_X_2+1, yend = Y_MAX, size = 1),
+    geom_segment(x = CURVE_START_X_1 - 2, y = 0, xend = CURVE_START_X_2 + 2, yend = 0, size = 1),
+    geom_segment(x = CURVE_START_X_1 - 2 , y = Y_MAX, xend = CURVE_START_X_2 + 2, yend = Y_MAX, size = 1),
     geom_line(data = bottom_left, aes(x = x, y = y), size = 1),
     geom_line(data = bottom_right, aes(x = x, y = y), size = 1), 
     geom_line(data = top_left, aes(x = x, y = y), size = 1),
