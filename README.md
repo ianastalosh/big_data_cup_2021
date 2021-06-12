@@ -1,5 +1,7 @@
 # Big Data Cup 2021
 
+**Update: I was a finalist in this competition! You can view my (presentation at the Ottawa Hockey Analytics Conference here)[https://www.youtube.com/watch?v=etTYTFt4Z-Y&t=4470s].**
+
 Thanks for coming to my Big Data Cup repo! Before starting this project, I had only watched two NHL games and each Mighty Ducks movie five or so times each. 
 
 The final report submitted is contained in `report.pdf`. I use a k-means clustering approach to group pass types present in women's hockey. I then attempted to determine which pass types have the greatest contribution to shot attempts, be it directly or in the build up play preceding it. It didn't quite turn out how I wanted it to because I ran out of time, and I had to change my idea a few times (originally I wanted to look at passing combinations, ie. two-pass couplets, and see their effect. However, the sample size was too small and the numbers of passing combinations was too low to determine anything useful). In any case, I still think there's the pieces of an interesting idea here!
